@@ -1,4 +1,4 @@
-.PHONY: build run vet test race lint clean install
+.PHONY: build run vet test race lint clean install ci e2e
 
 PREFIX ?= $(HOME)/.local
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
@@ -30,6 +30,12 @@ test:
 
 race:
 	go test -race ./...
+
+ci: lint test
+	go test -race ./internal/... ./tests/...
+
+e2e: build
+	./scripts/e2e.sh
 
 clean:
 	rm -rf bin/ dist/
