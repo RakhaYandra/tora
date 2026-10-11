@@ -64,6 +64,8 @@ rejected. Full example: `tora.yaml.example`.
 - `tora start|stop|restart SERVICE` — `stop`/`restart` refuse while a
   dependent is still RUNNING (explicit error; use `down` for full shutdown).
 - `tora logs SERVICE [--tail N] [--follow]`, `tora logs --all [--follow]`.
+- `tora tui` — interactive dashboard: live status, log pane with follow,
+  filter (`/`), start/stop (`s`), restart (`r`), quit (`q`).
 - `tora config validate` — exit 2 on invalid config, spawns nothing.
 - `tora version` — no config required.
 
@@ -97,7 +99,8 @@ Exit codes: `0` ok, `1` runtime/operation failure (incl. project lock held),
   (exit code of reparented processes is unknowable; recorded as -1).
 - `ps` shows SERVICE/STATUS/PID/STARTED. Tora does not claim port ownership
   and performs no health checks or resource metering.
-- `restart --all`, TUI, log search, watch mode: not in v0.1.
+- `restart --all`, log search, watch mode: not in v0.1.
+- `tora tui` shipped in v0.2.0; watch mode still out.
 - Linux only.
 
 ## Security
