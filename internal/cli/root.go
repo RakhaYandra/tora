@@ -124,6 +124,6 @@ restart, and coordinated shutdown.`,
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "diagnostic output on stderr")
 
 	root.AddCommand(newInit(), newUp(), newDown(), newPs(),
-		newStart(), newStop(), newRestart(), newLogs(), newConfig(), newVersion(), newTui(), newWatch())
+		newStart(), newStop(), newRestart(), newLogs(), newConfig(), newVersion(), newTui(), newWatch(), newDaemon())
 	return root
 }

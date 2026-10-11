@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5.0
+
+P2 foreground daemon:
+
+- `tora daemon` supervises continuously (stale reconcile, on-failure
+  respawn with backoff, health re-probes) while holding the project lock.
+  Mutating commands fail fast during supervision; `ps`/`logs` unaffected.
+  Ctrl+C exits 130 with services running unless `--down-on-exit`.
+- Supervision still ends when the daemon exits; next invocation recovers.
+
 ## v0.4.0
 
 P2 health/readiness:

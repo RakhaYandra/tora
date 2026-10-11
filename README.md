@@ -77,6 +77,10 @@ rejected. Full example: `tora.yaml.example`.
 - `tora watch [SERVICE]` — restart on file changes under working dirs
   (recursive; ignores .git/node_modules/.tora/vendor/dist; 500ms debounce).
   Blocks until Ctrl+C; services keep running on exit.
+- `tora daemon [--interval 5s] [--down-on-exit]` — continuous foreground
+  supervision (stale reconcile, on-failure respawn with backoff, health
+  re-probes). Holds the project lock; other mutating commands fail fast
+  while it runs. Ctrl+C exits 130; services keep running by default.
 - `tora config validate` — exit 2 on invalid config, spawns nothing.
 - `tora version` — no config required.
 
