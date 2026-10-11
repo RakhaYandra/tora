@@ -63,9 +63,15 @@ rejected. Full example: `tora.yaml.example`.
 - `tora ps [--json]` — live status verified against `/proc`, not just state.
 - `tora start|stop|restart SERVICE` — `stop`/`restart` refuse while a
   dependent is still RUNNING (explicit error; use `down` for full shutdown).
-- `tora logs SERVICE [--tail N] [--follow]`, `tora logs --all [--follow]`.
+- `tora logs SERVICE [--tail N] [--follow]`, `tora logs --all [--follow]`,
+  both with `--grep PATTERN` (`-i` case-insensitive, substring match).
+- `tora restart --all` — stop everything (reverse order) then start again.
 - `tora tui` — interactive dashboard: live status, log pane with follow,
   filter (`/`), start/stop (`s`), restart (`r`), quit (`q`).
+- `tora restart --all` — stop everything (reverse order) then start again.
+- `tora watch [SERVICE]` — restart on file changes under working dirs
+  (recursive; ignores .git/node_modules/.tora/vendor/dist; 500ms debounce).
+  Blocks until Ctrl+C; services keep running on exit.
 - `tora config validate` — exit 2 on invalid config, spawns nothing.
 - `tora version` — no config required.
 
@@ -100,7 +106,10 @@ Exit codes: `0` ok, `1` runtime/operation failure (incl. project lock held),
 - `ps` shows SERVICE/STATUS/PID/STARTED. Tora does not claim port ownership
   and performs no health checks or resource metering.
 - `restart --all`, log search, watch mode: not in v0.1.
-- `tora tui` shipped in v0.2.0; watch mode still out.
+- `tora tui` shipped in v0.2.0; `restart --all`, `logs --grep`, `watch`
+  shipped in v0.3.0. Watch restarts via the same guarded path as manual
+  restart (refused while dependents run); config edits are not watched
+  (restart manually after changing tora.yaml).
 - Linux only.
 
 ## Security
