@@ -91,7 +91,9 @@ func WaitGone(pgid int, timeout time.Duration) bool {
 }
 
 // Stop performs graceful shutdown: SIGTERM, wait, SIGKILL fallback.
-// Ownership is re-verified before each signal.
+// Ownership is re-verified before each signal. A group that outlives SIGKILL
+// is never reported as stopped: it returns a linger error instead, so a
+// surviving process can never pass silently (e.g. PID reuse or D-state stall).
 func Stop(pid, pgid int, startTime string, timeout time.Duration) (killed bool, err error) {
 	if !state.Owns(pid, pgid, startTime) {
 		// Not ours: if the recorded pid is simply gone, treat as already stopped.
@@ -102,7 +104,10 @@ func Stop(pid, pgid int, startTime string, timeout time.Duration) (killed bool, 
 	}
 	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
 		if !state.Owns(pid, pgid, startTime) {
-			return false, nil
+			if !GroupAlive(pgid) {
+				return false, nil
+			}
+			return false, fmt.Errorf("SIGTERM pgid %d: %v; group %d lingers with unverified members, refusing to SIGKILL strangers", pgid, err, pgid)
 		}
 		return false, fmt.Errorf("SIGTERM pgid %d: %w", pgid, err)
 	}
@@ -110,11 +115,13 @@ func Stop(pid, pgid int, startTime string, timeout time.Duration) (killed bool, 
 		return false, nil
 	}
 	if !state.Owns(pid, pgid, startTime) {
-		return false, nil
+		return false, fmt.Errorf("group %d lingers but pid %d is no longer verifiable; refusing to SIGKILL without ownership proof", pgid, pid)
 	}
 	if err := syscall.Kill(-pgid, syscall.SIGKILL); err != nil {
 		return false, fmt.Errorf("SIGKILL pgid %d: %w", pgid, err)
 	}
-	WaitGone(pgid, 5*time.Second)
+	if !WaitGone(pgid, 5*time.Second) {
+		return true, fmt.Errorf("group %d lingers after SIGKILL (likely uninterruptible sleep); verify manually, PIDs in group may still run", pgid)
+	}
 	return true, nil
 }

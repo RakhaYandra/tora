@@ -303,3 +303,21 @@ func TestUnknownService(t *testing.T) {
 		t.Fatalf("unknown up target must fail: %+v", res)
 	}
 }
+
+func TestStopUnverifiedLingerIsLoud(t *testing.T) {
+	o, ctx := setup(t, base+`
+  db:
+    command: ["sleep", "30"]
+`)
+	o.Up(ctx, "")
+	db, _ := o.S.Get("db")
+	// Bogus starttime on a LIVE foreign-equivalent process: Stop must refuse
+	// loudly and leave the process alone (never silent, never signaled).
+	_, err := process.Stop(db.PID, db.PGID, "bogus-starttime", 2*time.Second)
+	if err == nil || !strings.Contains(err.Error(), "identity mismatch") {
+		t.Fatalf("expected loud identity refusal, got %v", err)
+	}
+	if !state.Inspect(db.PID).Alive {
+		t.Fatal("refused process must be untouched")
+	}
+}
