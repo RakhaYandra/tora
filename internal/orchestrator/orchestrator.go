@@ -307,8 +307,18 @@ func (o *Orchestrator) markFailed(name, msg string) Result {
 
 func (o *Orchestrator) stopOne(ctx context.Context, name string) Result {
 	e, ok := o.S.Get(name)
-	if !ok || e.Status == state.Stopped || e.Status == state.Exited || e.Status == state.Failed {
+	if !ok || e.Status == state.Stopped {
 		return Result{Name: name, Status: state.Stopped}
+	}
+	if e.Status == state.Exited || e.Status == state.Failed {
+		// Acknowledge a dead service: if nothing of ours runs anymore,
+		// record STOPPED (keeps exit code/error for forensics).
+		if e.PID <= 0 || !state.Owns(e.PID, e.PGID, e.StartTime) {
+			e.Status = state.Stopped
+			o.S.Set(e)
+			_ = o.S.Save()
+		}
+		return Result{Name: name, Status: state.Stopped, PID: e.PID, ExitCode: e.ExitCode, Error: e.Error}
 	}
 	e.Status = state.Stopping
 	o.S.Set(e)
