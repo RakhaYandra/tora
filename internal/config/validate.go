@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -86,6 +87,24 @@ func Validate(c *Config) []error {
 				fail("services.%s.env.PORT: %q already claimed by services.%s", name, port, owner)
 			} else {
 				ports[port] = name
+			}
+		}
+		if h := s.Healthcheck; h != nil {
+			hp := "services." + name + ".healthcheck"
+			if h.Type != "tcp" && h.Type != "http" {
+				fail("%s.type: must be \"tcp\" or \"http\", got %q", hp, h.Type)
+			}
+			if h.Port < 1 || h.Port > 65535 {
+				fail("%s.port: must be 1-65535, got %d", hp, h.Port)
+			}
+			if h.Type == "http" && !strings.HasPrefix(h.Path, "/") {
+				fail("%s.path: must start with /, got %q", hp, h.Path)
+			}
+			if h.Type == "tcp" && h.Path != "" {
+				fail("%s.path: only valid for type http", hp)
+			}
+			if h.Interval.Std() <= 0 || h.Timeout.Std() <= 0 {
+				fail("%s: interval and timeout must be positive", hp)
 			}
 		}
 	}

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/RakhaYandra/tora/internal/config"
+	"github.com/RakhaYandra/tora/internal/health"
 	"github.com/RakhaYandra/tora/internal/logs"
 	"github.com/RakhaYandra/tora/internal/process"
 	"github.com/RakhaYandra/tora/internal/state"
@@ -311,6 +312,35 @@ func (o *Orchestrator) startOne(ctx context.Context, name string) Result {
 	}
 	o.S.Set(entry)
 	_ = o.S.Save()
+	if entry.Status == state.Running && svc.Healthcheck != nil {
+		return o.awaitHealthy(ctx, name, entry, svc)
+	}
+	return Result{Name: name, Status: entry.Status, PID: entry.PID, ExitCode: entry.ExitCode, Error: entry.Error}
+}
+
+// awaitHealthy blocks until the service passes its healthcheck (budget =
+// runtime.startup_timeout). Failure stops the just-spawned process and marks
+// FAILED so dependents never start on an unready dependency.
+func (o *Orchestrator) awaitHealthy(ctx context.Context, name string, entry state.ServiceState, svc config.Service) Result {
+	wait := o.L.Config.Runtime.StartupTimeout.Std()
+	if err := health.Wait(ctx, svc.Healthcheck, wait); err != nil {
+		_, _ = process.Stop(entry.PID, entry.PGID, entry.StartTime, o.L.Config.Runtime.ShutdownTimeout.Std())
+		if e, ok := o.S.Get(name); ok {
+			e.Status = state.Failed
+			e.Ready = false
+			e.Error = fmt.Sprintf("unhealthy: %v; see %s", err, logs.Path(o.L.LogDir, name))
+			o.S.Set(e)
+			_ = o.S.Save()
+		}
+		return Result{Name: name, Status: state.Failed, PID: entry.PID,
+			Error: fmt.Sprintf("unhealthy: %v", err)}
+	}
+	if e, ok := o.S.Get(name); ok {
+		e.Ready = true
+		o.S.Set(e)
+		_ = o.S.Save()
+		entry = e
+	}
 	return Result{Name: name, Status: entry.Status, PID: entry.PID, ExitCode: entry.ExitCode, Error: entry.Error}
 }
 

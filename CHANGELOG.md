@@ -1,6 +1,24 @@
 # Changelog
 
-## v0.3.0
+## v0.4.0
+
+P2 health/readiness:
+
+- Optional per-service `healthcheck` (`tcp|http`, host/port/path/interval/
+  timeout with defaults). Dependents start only after deps are READY within
+  `runtime.startup_timeout`; unhealthy services are stopped and reported
+  FAILED, blocking dependents like any startup failure.
+- `Ready` recorded in state and `ps --json`. Without a check, order-only
+  semantics are unchanged. Health is verified at startup (no daemon yet).
+
+## v0.3.1
+
+Validation and planning:
+
+- Config rejects missing executables (`LookPath`) and duplicate `PORT`
+  env claims.
+- `up --dry-run` prints dependency levels with resolved commands (human
+  and `--json`); no lock, state, or spawn.
 
 P1 batch:
 

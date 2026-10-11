@@ -29,6 +29,7 @@ type ServiceState struct {
 	Command   []string  `json:"command"`
 	WorkDir   string    `json:"work_dir"`
 	Status    string    `json:"status"`
+	Ready     bool      `json:"ready"` // healthcheck passed at startup (false when unconfigured)
 	ExitCode  int       `json:"exit_code"`
 	StartedAt time.Time `json:"started_at"`
 	Restarts  int       `json:"restarts"`

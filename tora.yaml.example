@@ -20,6 +20,10 @@ services:
       APP_ENV: development
       PORT: "8080"
     restart: "no"
+    healthcheck:
+      type: http
+      port: 8080
+      path: /health
 
   worker:
     command: ["go", "run", "./cmd/worker"]

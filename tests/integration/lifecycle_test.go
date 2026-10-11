@@ -350,3 +350,102 @@ func TestRestartAll(t *testing.T) {
 		}
 	}
 }
+
+func TestHealthGatesDependent(t *testing.T) {
+	// api listens only after 2s; web must start after api is READY.
+	dir := t.TempDir()
+	fix := filepath.Join(dir, "app")
+	os.MkdirAll(fix, 0o755)
+	mainSrc, err := os.ReadFile("../fixtures/health/main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(fix, "main.go"), mainSrc, 0o644)
+	yamlBody := `
+version: 1
+project:
+  name: healthtest
+runtime:
+  startup_timeout: 15s
+  shutdown_timeout: 3s
+  log_dir: .tora/logs
+  state_dir: .tora
+services:
+  api:
+    command: ["go", "run", "./main.go"]
+    working_dir: ./app
+    env:
+      PORT: "18091"
+      READY_DELAY: "2s"
+    healthcheck:
+      type: http
+      port: 18091
+      path: /health
+  web:
+    command: ["sleep", "30"]
+    depends_on: ["api"]
+`
+	cfgPath := filepath.Join(dir, "tora.yaml")
+	os.WriteFile(cfgPath, []byte(yamlBody), 0o644)
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := config.Resolve(cfg, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st, _ := state.Open(l.StateDir, "healthtest")
+	o := &orchestrator.Orchestrator{L: l, S: st}
+	t.Cleanup(func() { o.Down(context.Background()) })
+	start := time.Now()
+	res := o.Up(context.Background(), "")
+	if elapsed := time.Since(start); elapsed < 2*time.Second {
+		t.Fatalf("up took %v: dependent must wait for readiness", elapsed)
+	}
+	if statusOf(res, "api").Status != state.Running {
+		t.Fatalf("api: %+v", statusOf(res, "api"))
+	}
+	if statusOf(res, "web").Status != state.Running {
+		t.Fatalf("web: %+v", statusOf(res, "web"))
+	}
+	e, _ := o.S.Get("api")
+	if !e.Ready {
+		t.Fatal("api must be recorded Ready")
+	}
+}
+
+func TestUnhealthyBlocksDependent(t *testing.T) {
+	o, ctx := setup(t, `
+version: 1
+project:
+  name: healthtest
+runtime:
+  startup_timeout: 2s
+  shutdown_timeout: 2s
+  log_dir: .tora/logs
+  state_dir: .tora
+services:
+  bad:
+    command: ["sleep", "30"]
+    healthcheck:
+      type: tcp
+      port: 45998
+  needsbad:
+    command: ["sleep", "30"]
+    depends_on: ["bad"]
+`)
+	res := o.Up(ctx, "")
+	if got := statusOf(res, "bad"); got.Status != state.Failed || !strings.Contains(got.Error, "unhealthy") {
+		t.Fatalf("bad must fail unhealthy: %+v", got)
+	}
+	if got := statusOf(res, "needsbad"); got.Status != state.Stopped {
+		t.Fatalf("dependent must not start: %+v", got)
+	}
+	// Failed readiness must not leak the spawned process.
+	for _, e := range o.S.All() {
+		if e.Status == state.Running {
+			t.Fatalf("nothing may run after unhealthy rollback: %+v", e)
+		}
+	}
+}

@@ -49,6 +49,11 @@ rejected. Full example: `tora.yaml.example`.
 - `command` is an argv array, never a shell string. No implicit shell.
 - `working_dir` default `.`, resolved against the project dir; must exist.
 - `depends_on` means **startup order**, not readiness (see Limits).
+- `healthcheck` (optional) gates dependents on readiness: `{type: tcp|http,
+  port, host=127.0.0.1, path=/ (http), interval=500ms, timeout=2s}`.
+  A service counts as RUNNING only after its check passes within
+  `runtime.startup_timeout`; failure stops it and blocks dependents.
+  Without it, order-only semantics apply.
 - `restart`: `no` (default) or `on-failure` (bounded, best-effort — see Limits).
 - Service env = parent environment overridden by service `env`. Values are
   never printed by any command.

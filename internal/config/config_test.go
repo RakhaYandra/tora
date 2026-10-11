@@ -153,3 +153,40 @@ func TestValidateExecutableAndPORT(t *testing.T) {
 }
 
 func contains(s, sub string) bool { return strings.Contains(s, sub) }
+
+func TestValidateHealthcheck(t *testing.T) {
+	mk := func() *Config {
+		c := valid()
+		s := c.Services["api"]
+		s.Healthcheck = &Healthcheck{Type: "http", Port: 8080}
+		c.Services["api"] = s
+		c.applyDefaults()
+		return c
+	}
+	if errs := Validate(mk()); len(errs) != 0 {
+		t.Fatalf("valid healthcheck rejected: %v", errs)
+	}
+	if h := mk().Services["api"].Healthcheck; h.Host != "127.0.0.1" || h.Path != "/" {
+		t.Fatalf("defaults not applied: %+v", h)
+	}
+	cases := []struct {
+		name   string
+		mutate func(*Healthcheck)
+	}{
+		{"bad type", func(h *Healthcheck) { h.Type = "grpc" }},
+		{"bad port", func(h *Healthcheck) { h.Port = 99999 }},
+		{"bad path", func(h *Healthcheck) { h.Path = "health" }},
+		{"tcp with path", func(h *Healthcheck) { h.Type = "tcp"; h.Path = "/x" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := mk()
+			s := c.Services["api"]
+			tc.mutate(s.Healthcheck)
+			c.Services["api"] = s
+			if errs := Validate(c); len(errs) == 0 {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+}

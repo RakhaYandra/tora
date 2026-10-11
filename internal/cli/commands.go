@@ -279,6 +279,7 @@ func newDown() *cobra.Command {
 type psEntry struct {
 	Name      string `json:"name"`
 	Status    string `json:"status"`
+	Ready     bool   `json:"ready"`
 	PID       int    `json:"pid,omitempty"`
 	ExitCode  int    `json:"exit_code,omitempty"`
 	StartedAt string `json:"started_at,omitempty"`
@@ -313,7 +314,7 @@ func newPs() *cobra.Command {
 				for _, n := range names {
 					e := psEntry{Name: n, Status: state.Stopped}
 					if s, ok := live[n]; ok {
-						e = psEntry{Name: n, Status: s.Status, PID: s.PID,
+						e = psEntry{Name: n, Status: s.Status, Ready: s.Ready, PID: s.PID,
 							ExitCode: s.ExitCode, StartedAt: s.StartedAt.Format(time.RFC3339), Error: s.Error}
 					}
 					entries = append(entries, e)

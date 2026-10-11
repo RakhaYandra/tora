@@ -43,11 +43,23 @@ type Runtime struct {
 }
 
 type Service struct {
-	Command    []string          `yaml:"command"`
-	WorkingDir string            `yaml:"working_dir"`
-	DependsOn  []string          `yaml:"depends_on"`
-	Env        map[string]string `yaml:"env"`
-	Restart    string            `yaml:"restart"`
+	Command     []string          `yaml:"command"`
+	WorkingDir  string            `yaml:"working_dir"`
+	DependsOn   []string          `yaml:"depends_on"`
+	Env         map[string]string `yaml:"env"`
+	Restart     string            `yaml:"restart"`
+	Healthcheck *Healthcheck      `yaml:"healthcheck"`
+}
+
+// Healthcheck gates dependents: a service is RUNNING only after its check
+// passes (within runtime.startup_timeout). Absent = order-only (v0.1 watch).
+type Healthcheck struct {
+	Type     string   `yaml:"type"`     // tcp | http (required when block present)
+	Host     string   `yaml:"host"`     // default 127.0.0.1
+	Port     int      `yaml:"port"`     // required, 1-65535
+	Path     string   `yaml:"path"`     // http only, default /
+	Interval Duration `yaml:"interval"` // default 500ms
+	Timeout  Duration `yaml:"timeout"`  // per attempt, default 2s
 }
 
 // Defaults applied when fields are absent.
@@ -57,6 +69,11 @@ const (
 	DefaultLogDir          = ".tora/logs"
 	DefaultStateDir        = ".tora"
 	DefaultRestart         = "no"
+
+	DefaultHealthHost     = "127.0.0.1"
+	DefaultHealthPath     = "/"
+	DefaultHealthInterval = 500 * time.Millisecond
+	DefaultHealthTimeout  = 2 * time.Second
 )
 
 func (c *Config) applyDefaults() {
@@ -84,6 +101,21 @@ func (c *Config) applyDefaults() {
 		}
 		if s.DependsOn == nil {
 			s.DependsOn = []string{}
+		}
+		if s.Healthcheck != nil {
+			h := s.Healthcheck
+			if h.Host == "" {
+				h.Host = DefaultHealthHost
+			}
+			if h.Type == "http" && h.Path == "" {
+				h.Path = DefaultHealthPath
+			}
+			if h.Interval == 0 {
+				h.Interval = Duration(DefaultHealthInterval)
+			}
+			if h.Timeout == 0 {
+				h.Timeout = Duration(DefaultHealthTimeout)
+			}
 		}
 		c.Services[name] = s
 	}
