@@ -358,36 +358,49 @@ func newStop() *cobra.Command {
 }
 
 func newRestart() *cobra.Command {
-	return &cobra.Command{
-		Use:   "restart SERVICE",
+	var all bool
+	cmd := &cobra.Command{
+		Use:   "restart [SERVICE]",
 		Short: "Gracefully restart a service (dependents must be stopped first)",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			l, _, err := loadProject()
 			if err != nil {
 				return err
 			}
-			if _, ok := l.Config.Services[args[0]]; !ok {
-				return fail(2, "unknown service %q", args[0])
+			if all && len(args) == 1 {
+				return fail(2, "--all and SERVICE are mutually exclusive")
+			}
+			if !all && len(args) != 1 {
+				return fail(2, "specify a SERVICE or --all")
 			}
 			ctx, fired := signalCtx()
-			var r orchestrator.Result
+			var results []orchestrator.Result
 			if err := withLock(l, func(o *orchestrator.Orchestrator, _ *state.Store) error {
-				r = o.Restart(ctx, args[0])
+				if all {
+					results = o.RestartAll(ctx)
+					return nil
+				}
+				if _, ok := l.Config.Services[args[0]]; !ok {
+					return fail(2, "unknown service %q", args[0])
+				}
+				results = []orchestrator.Result{o.Restart(ctx, args[0])}
 				return nil
 			}); err != nil {
 				return err
 			}
-			emitResults([]orchestrator.Result{r}, "restarted")
+			emitResults(results, "restarted")
 			switch {
 			case *fired:
 				return fail(130, "cancelled by signal")
-			case r.Status == "FAILED":
-				return fail(1, "restart failed: %s", r.Error)
+			case opFailed(results):
+				return fail(1, "restart failed")
 			}
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&all, "all", false, "restart all services (down then up)")
+	return cmd
 }
 
 func newVersion() *cobra.Command {

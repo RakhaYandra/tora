@@ -321,3 +321,32 @@ func TestStopUnverifiedLingerIsLoud(t *testing.T) {
 		t.Fatal("refused process must be untouched")
 	}
 }
+
+func TestRestartAll(t *testing.T) {
+	o, ctx := setup(t, base+`
+  db:
+    command: ["sleep", "30"]
+  api:
+    command: ["sleep", "30"]
+    depends_on: ["db"]
+`)
+	o.Up(ctx, "")
+	before := map[string]int{}
+	for _, n := range []string{"db", "api"} {
+		e, _ := o.S.Get(n)
+		before[n] = e.PID
+	}
+	res := o.RestartAll(ctx)
+	for _, n := range []string{"db", "api"} {
+		if got := statusOf(res, n); got.Status != state.Running {
+			t.Fatalf("restart --all %s: %+v", n, got)
+		}
+		e, _ := o.S.Get(n)
+		if e.PID == before[n] {
+			t.Fatalf("%s kept PID %d, want a fresh spawn", n, e.PID)
+		}
+		if state.Inspect(before[n]).Alive {
+			t.Fatalf("old %s pid %d must be dead", n, before[n])
+		}
+	}
+}

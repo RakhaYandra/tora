@@ -210,6 +210,25 @@ func (o *Orchestrator) Stop(ctx context.Context, target string) Result {
 	return o.stopOne(ctx, target)
 }
 
+// RestartAll gracefully stops every managed service (reverse dependency
+// order) then starts everything again. A failed start rolls back like Up.
+func (o *Orchestrator) RestartAll(ctx context.Context) []Result {
+	down := o.Down(ctx)
+	if opFailed(down) {
+		return down
+	}
+	return o.Up(ctx, "")
+}
+
+func opFailed(rs []Result) bool {
+	for _, r := range rs {
+		if r.Status == state.Failed {
+			return true
+		}
+	}
+	return false
+}
+
 // Restart gracefully stops then starts one service. Same dependent guard as Stop.
 // Any pending on-failure restart counter is reset.
 func (o *Orchestrator) Restart(ctx context.Context, target string) Result {
