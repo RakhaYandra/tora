@@ -1,0 +1,59 @@
+version: 1
+
+project:
+  name: pulse
+
+runtime:
+  startup_timeout: 30s
+  shutdown_timeout: 10s
+  log_dir: .tora/logs
+  state_dir: .tora
+
+services:
+  api:
+    command: ["go", "run", "./cmd/api"]
+    working_dir: .
+    depends_on:
+      - postgres
+      - redis
+    env:
+      APP_ENV: development
+      PORT: "8080"
+    restart: "no"
+
+  worker:
+    command: ["go", "run", "./cmd/worker"]
+    working_dir: .
+    depends_on:
+      - postgres
+      - redis
+    env:
+      APP_ENV: development
+    restart: "no"
+
+  web:
+    command: ["npm", "run", "dev", "--", "--host", "127.0.0.1"]
+    working_dir: ./web
+    depends_on:
+      - api
+    env:
+      NODE_ENV: development
+    restart: "no"
+
+  postgres:
+    command:
+      - docker
+      - compose
+      - up
+      - postgres
+    working_dir: .
+    restart: "no"
+
+  redis:
+    command:
+      - docker
+      - compose
+      - up
+      - redis
+    working_dir: .
+    restart: "no"
