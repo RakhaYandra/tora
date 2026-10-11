@@ -41,6 +41,28 @@ type streamer struct {
 	prefix string // display prefix, e.g. "[api] " or "[12:01:02] [api] "
 	offset int64
 	f      *os.File
+	match  func(raw string) bool // nil keeps all; applied pre-prefix
+}
+
+// Grep keeps lines containing pattern (substring). Empty pattern keeps all.
+func Grep(lines []string, pattern string, ignoreCase bool) []string {
+	if pattern == "" {
+		return lines
+	}
+	if ignoreCase {
+		pattern = strings.ToLower(pattern)
+	}
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		hay := l
+		if ignoreCase {
+			hay = strings.ToLower(l)
+		}
+		if strings.Contains(hay, pattern) {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 func (s *streamer) open() error {
@@ -84,7 +106,10 @@ func (s *streamer) CatchUp(emit func(string)) error {
 	for {
 		line, err := rd.ReadString('\n')
 		if len(line) > 0 {
-			emit(s.prefix + strings.TrimRight(line, "\n"))
+			raw := strings.TrimRight(line, "\n")
+			if s.match == nil || s.match(raw) {
+				emit(s.prefix + raw)
+			}
 		}
 		if err != nil {
 			break
@@ -97,19 +122,23 @@ func (s *streamer) CatchUp(emit func(string)) error {
 
 // Follow prints existing tail then streams appended lines until ctx ends.
 // names selects services; when combined, lines carry timestamp+service prefix.
-func Follow(ctx context.Context, logDir string, names []string, tailN int, combined bool, out io.Writer) error {
+// grep filters raw lines (substring, optional case-insensitive); "" disables.
+func Follow(ctx context.Context, logDir string, names []string, tailN int, combined bool, grep string, ignoreCase bool, out io.Writer) error {
+	match := func(raw string) bool {
+		return len(Grep([]string{raw}, grep, ignoreCase)) == 1
+	}
 	ss := make([]*streamer, len(names))
 	for i, n := range names {
 		prefix := "[" + n + "] "
 		if combined {
 			prefix = "" // timestamped per line below
 		}
-		ss[i] = &streamer{path: Path(logDir, n), prefix: prefix}
+		ss[i] = &streamer{path: Path(logDir, n), prefix: prefix, match: match}
 		existing, err := Tail(ss[i].path, tailN)
 		if err != nil {
 			return err
 		}
-		for _, l := range existing {
+		for _, l := range Grep(existing, grep, ignoreCase) {
 			if combined {
 				fmt.Fprintf(out, "[%s] [%s] %s\n", time.Now().Format("15:04:05"), n, l)
 			} else {

@@ -17,8 +17,10 @@ func newLogs() *cobra.Command {
 	var follow bool
 	var tailN int
 	var all bool
+	var grep string
+	var ignoreCase bool
 	cmd := &cobra.Command{
-		Use:   "logs [SERVICE] [--follow] [--tail N] [--all]",
+		Use:   "logs [SERVICE] [--follow] [--tail N] [--all] [--grep PATTERN]",
 		Short: "Read service logs (stdout+stderr capture)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -48,7 +50,7 @@ func newLogs() *cobra.Command {
 				sctx, _ := signalCtx()
 				_ = stop
 				_ = ctx
-				if err := logs.Follow(sctx, l.LogDir, names, tailN, all, os.Stdout); err != nil {
+				if err := logs.Follow(sctx, l.LogDir, names, tailN, all, grep, ignoreCase, os.Stdout); err != nil {
 					return fail(1, "%v", err)
 				}
 				return nil
@@ -58,7 +60,7 @@ func newLogs() *cobra.Command {
 				if err != nil {
 					return fail(1, "%v", err)
 				}
-				for _, line := range lines {
+				for _, line := range logs.Grep(lines, grep, ignoreCase) {
 					if all {
 						fmt.Printf("[%s] %s\n", n, line)
 					} else {
@@ -72,6 +74,8 @@ func newLogs() *cobra.Command {
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "stream new log lines until interrupted")
 	cmd.Flags().IntVar(&tailN, "tail", 0, "show only the last N lines (0 = all)")
 	cmd.Flags().BoolVar(&all, "all", false, "read all services with [service] prefix")
+	cmd.Flags().StringVarP(&grep, "grep", "g", "", "show only lines containing PATTERN (substring)")
+	cmd.Flags().BoolVarP(&ignoreCase, "ignore-case", "i", false, "case-insensitive --grep")
 	return cmd
 }
 

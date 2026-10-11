@@ -47,3 +47,19 @@ func TestRotate(t *testing.T) {
 		t.Fatal("Path helper broken")
 	}
 }
+
+func TestGrep(t *testing.T) {
+	lines := []string{"INFO boot ok", "ERROR disk full", "info retry"}
+	if got := Grep(lines, "", false); len(got) != 3 {
+		t.Fatalf("empty pattern keeps all, got %v", got)
+	}
+	if got := Grep(lines, "ERROR", false); len(got) != 1 || got[0] != lines[1] {
+		t.Fatalf("case-sensitive grep = %q", got)
+	}
+	if got := Grep(lines, "info", true); len(got) != 2 {
+		t.Fatalf("ignore-case grep = %q", got)
+	}
+	if got := Grep(lines, "missing", false); len(got) != 0 {
+		t.Fatalf("no match must be empty, got %q", got)
+	}
+}
