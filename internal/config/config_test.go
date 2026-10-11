@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -12,7 +13,7 @@ func valid() *Config {
 		Project: Project{Name: "pulse"},
 		Services: map[string]Service{
 			"api":    {Command: []string{"go", "run", "./cmd/api"}, DependsOn: []string{"db"}},
-			"db":     {Command: []string{"postgres"}},
+			"db":     {Command: []string{"sleep", "30"}},
 			"worker": {Command: []string{"go", "run", "./cmd/worker"}, Restart: "on-failure"},
 		},
 	}
@@ -118,3 +119,37 @@ func TestFind(t *testing.T) {
 		t.Fatalf("find = %q", got)
 	}
 }
+
+func TestValidateExecutableAndPORT(t *testing.T) {
+	c := valid()
+	s := c.Services["api"]
+	s.Command = []string{"definitely-not-a-real-binary-xyz"}
+	c.Services["api"] = s
+	found := false
+	for _, e := range Validate(c) {
+		if contains(e.Error(), "not found in PATH") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected missing-executable error")
+	}
+	c = valid()
+	a := c.Services["api"]
+	a.Env = map[string]string{"PORT": "8080"}
+	c.Services["api"] = a
+	w := c.Services["worker"]
+	w.Env = map[string]string{"PORT": "8080"}
+	c.Services["worker"] = w
+	found = false
+	for _, e := range Validate(c) {
+		if contains(e.Error(), "already claimed") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected PORT collision error")
+	}
+}
+
+func contains(s, sub string) bool { return strings.Contains(s, sub) }

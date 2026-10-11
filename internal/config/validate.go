@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"time"
@@ -42,6 +43,8 @@ func Validate(c *Config) []error {
 		}
 		if len(s.Command) == 0 {
 			fail("%s.command: required, must be a non-empty argv array (no shell strings)", p)
+		} else if _, err := exec.LookPath(s.Command[0]); err != nil {
+			fail("%s.command: executable %q not found in PATH", p, s.Command[0])
 		}
 		for _, arg := range s.Command {
 			if arg == "" {
@@ -73,6 +76,18 @@ func Validate(c *Config) []error {
 	}
 	if c.Runtime.LogDir == "" || c.Runtime.StateDir == "" {
 		fail("runtime: log_dir and state_dir must not be empty")
+	}
+	// PORT collision hint: two services claiming the same PORT env cannot
+	// both bind it. Advisory of intent, not a live port probe.
+	ports := map[string]string{}
+	for name, s := range c.Services {
+		if port, ok := s.Env["PORT"]; ok && port != "" {
+			if owner, dup := ports[port]; dup {
+				fail("services.%s.env.PORT: %q already claimed by services.%s", name, port, owner)
+			} else {
+				ports[port] = name
+			}
+		}
 	}
 	return errs
 }

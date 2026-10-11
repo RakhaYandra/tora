@@ -153,6 +153,7 @@ func opFailed(results []orchestrator.Result) bool {
 }
 
 func newUp() *cobra.Command {
+	var dryRun bool
 	cmd := &cobra.Command{
 		Use:   "up [SERVICE]",
 		Short: "Start all services (or SERVICE plus its dependencies)",
@@ -168,6 +169,9 @@ func newUp() *cobra.Command {
 				if _, ok := l.Config.Services[target]; !ok {
 					return fail(2, "unknown service %q", target)
 				}
+			}
+			if dryRun {
+				return printPlan(l, target)
 			}
 			ctx, fired := signalCtx()
 			var results []orchestrator.Result
@@ -190,7 +194,53 @@ func newUp() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print startup plan without spawning anything")
 	return cmd
+}
+
+// printPlan shows dependency levels and resolved commands. Zero side effects:
+// no lock, no state, no process is spawned.
+func printPlan(l *config.Loaded, target string) error {
+	scope := map[string][]string{}
+	for name, s := range l.Config.Services {
+		scope[name] = append([]string{}, s.DependsOn...)
+	}
+	if target != "" {
+		sub, err := orchestrator.Subgraph(scope, target)
+		if err != nil {
+			return fail(2, "%v", err)
+		}
+		scope = sub
+	}
+	levels, err := orchestrator.Sort(scope)
+	if err != nil {
+		return fail(2, "%v", err)
+	}
+	if jsonOut {
+		type entry struct {
+			Level   int      `json:"level"`
+			Service string   `json:"service"`
+			Command []string `json:"command"`
+			WorkDir string   `json:"work_dir"`
+		}
+		var out []entry
+		for i, lvl := range levels {
+			for _, n := range lvl {
+				out = append(out, entry{i + 1, n, l.Config.Services[n].Command, l.WorkDirs[n]})
+			}
+		}
+		raw, _ := json.MarshalIndent(out, "", "  ")
+		fmt.Println(string(raw))
+		return nil
+	}
+	fmt.Printf("TORA  project %s: startup plan (dry run: nothing spawned, no state written)\n", l.Config.Project.Name)
+	for i, lvl := range levels {
+		fmt.Printf("level %d (parallel):\n", i+1)
+		for _, n := range lvl {
+			fmt.Printf("  %-12s %q  dir=%s\n", n, strings.Join(l.Config.Services[n].Command, " "), l.WorkDirs[n])
+		}
+	}
+	return nil
 }
 
 func newDown() *cobra.Command {
